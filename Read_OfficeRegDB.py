@@ -177,7 +177,7 @@ def ParseRegistrationDBFile(inputPath, outputPath):
                     "     UNION ALL "
                     "     SELECT under_software.path || '\\' || HKEY_CURRENT_USER.name, HKEY_CURRENT_USER.name, HKEY_CURRENT_USER.node_id, HKEY_CURRENT_USER.write_time "
                     "       FROM HKEY_CURRENT_USER JOIN under_software ON HKEY_CURRENT_USER.parent_id=under_software.node_id "
-                    "       ORDER BY 2 "
+                    "       ORDER BY 1 "
                     "   ) "
                     " SELECT name, path, write_time, node_id FROM under_software "
                     " ) as t2 LEFT JOIN HKEY_CURRENT_USER_values on HKEY_CURRENT_USER_values.node_id=t2.node_id ")

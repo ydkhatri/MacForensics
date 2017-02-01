@@ -1,5 +1,5 @@
 # Parse the Notifications db from mac OSX
-#  (c) Yogesh Khatri - 2016 - www.swiftforensics.com
+#  (c) Yogesh Khatri - 2016- www.swiftforensics.com
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 # Script Name  : macNotifications.py
 # Author       : Yogesh Khatri
 # Last Updated : 1/4/2016
-# Requirement  : Python 3 and biplist
+# Requirement  : Python (2 or 3) and biplist
 #                biplist can be installed using the command 'pip install biplist' 
 # 
 # Purpose      : Parse the Notifications db found on mac OSX systems.
@@ -52,8 +52,6 @@ from biplist import *
 
 def RemoveTabsNewLines(str):
     return str.replace("\t", " ").replace("\r", " ").replace("\n", "")
-
-#def GetStringDate(unix_timestamp):
     
 def ProcessNotificationDb(inputPath, outputPath):
     try:
@@ -75,7 +73,9 @@ def ProcessNotificationDb(inputPath, outputPath):
             print ("Trying to create file '" + outputPath + "' for writing..")
             with codecs.open(outputPath, 'w', encoding='utf-16') as csv:
                 csv.write ("Time\tShown\tBundle\tAppPath\tUUID\tTitle\tMessage\r\n")
+                rowcount = 0
                 for row in cursor:
+                    rowcount += 1
                     title   = ''
                     message = ''
                     try:
@@ -89,12 +89,13 @@ def ProcessNotificationDb(inputPath, outputPath):
                         except:
                             pass
                         
-                    except (InvalidPlistException, NotBinaryPlistException) as e:
+                    except (InvalidPlistException, NotBinaryPlistException, Exception) as e:
                         print ("Invalid plist in table.", e )
                     try:
                         csv.write ('%s\t%s\t%s\t%s\t%s\t%s\t%s\r\n' %(row['time'], row['shown'], row['bundle'], row['appPath'], row['uuid'], title, message))
                     except Exception as ex:
                         print ("Error while writing to file, error details:\n", ex.args)
+                print ("Finished processing! Wrote " + str(rowcount) + " rows of data.")
         except Exception as ex:
             print ("Failed to create file '" + outputPath + "' for writing. Is it locked? Perhaps a permissions issue")
             print ("Error details: " , ex.args)
@@ -112,10 +113,11 @@ usage = ("macNotifications.py - Parse the OSX Notifications database \n\n"
          "macNotifications.py <path_to_db_file> <output.csv>\n"
          "Example: macNotifications.py  c:\\2676CFA4-F06E-4FFC-A48B-1C6457B2359D.db c:\\notifications.csv\n\n"
          "Output will be a tab-delimited file.\n\n"
-         "Requirements: Python 3 and biplist\n"
+         "Requirements: Python (2 or 3) and biplist\n"
          " biplist can be installed with a simple 'pip install biplist' command"
          )
          
+print ("Using Python %i.%i" % (sys.version_info.major, sys.version_info.minor) )
 if len(sys.argv) > 2:
     inputPath = sys.argv[1]
     outputPath = sys.argv[2]

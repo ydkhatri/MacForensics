@@ -17,7 +17,7 @@
 # 
 # Script Name  : Read_OfficeRegDB.py
 # Author       : Yogesh Khatri
-# Last Updated : 8/30/2016
+# Last Updated : 1/31/2017
 # Purpose/Usage: This script parses the file 'microsoftRegistrationDB.reg' found at
 #                /Users/research/Library/Group Containers/xxxx.Office/MicrosoftRegistrationDB.reg
 #                on mac OSX systems. This is an sqlite database which represents the
@@ -33,7 +33,11 @@
 #                Read_OfficeRegDB.py <path to microsoftRegistrationDB.reg> <output folder>
 #                Example: Read_OfficeRegDB.py  c:\microsoftRegistrationDB.reg c:\output
 #
-# Requirements:  Python 3 and biplist
+# Requirements:  Python (2 or 3), biplist and recent version of sqlite3
+#                If you get an error realated to sqlite, you will need a recent (or latest)
+#                version of sqlite3 from  https://sqlite.org/download.html . Copy the 
+#                sqlite3.dll file to the DLLs folder inside your python installation folder. 
+#                Replace the old file with new one.
 #                biplist can be installed with a simple 'pip install biplist' command"
 # 
 # Send bugs and feedback to yogesh@swiftforensics.com
@@ -48,6 +52,8 @@ import struct
 import os
 import codecs
 
+PYTHON_VER = 2
+
 def GetStringUtcFromFileTimeTS(val):
     t = GetUtcFromFileTimeTS(val)
     if t != None:
@@ -55,7 +61,7 @@ def GetStringUtcFromFileTimeTS(val):
     return ''
 
 def GetUtcFromFileTimeTS(val):
-    if type (val) == bytes:
+    if (PYTHON_VER == 2 and type (val) == buffer) or (PYTHON_VER > 2 and type (val) ==  bytes): # In python3, it is 'bytes'
         # Reverse order of bytes (read as little endian)
         try:
             windate = struct.unpack('<Q', val)[0]
@@ -71,7 +77,10 @@ def GetStringRepresentation(value, valuetype = None):
     if value == None:
         return s
     if valuetype == 3:  # REG_BINARY
-        s = binascii.hexlify(value).decode("ascii").upper() # For python3!
+        if PYTHON_VER == 2: s = binascii.hexlify(value).upper()
+        else:               s = binascii.hexlify(value).decode("ascii").upper() # For python3!
+    elif valuetype == 1: #REG_SZ
+        s = value
     else:
         s = str(value)
     return s
@@ -106,7 +115,7 @@ def GetBranch(plist, key):
             subkey = subkey[item]
         elif type(temp) != dict:
             # Sometimes, this happens, HKCU\Path\Var is a key having values in it AND Var is also a value in HKCU\Path
-            # Perhaps this is the (Default) value stored this way.
+            # The (Default) value is stored this way.
             subkey.update( { item : { "(Default)" : temp } } )
             subkey = subkey[item]
         else:
@@ -138,7 +147,10 @@ def CreatePListFromData(data):
             key = row['key']
             vname = row['valueName']
             vtype = row['valueType'] 
-            value = row['value'] #GetStringRepresentation(row['value'], row['valueType'])
+            if PYTHON_VER == 2 and vtype == 3: # In python2, special handling for Binary
+                value = Data(row['value'])
+            else:
+                value = row['value']
             if value == None: value = ''
             branch = GetBranch(plist, key)
             if ts != None: branch.update( {'LastWriteTimeUTC': ts })
@@ -166,7 +178,7 @@ def ParseRegistrationDBFile(inputPath, outputPath):
     conn = None
     try:
         conn = sqlite3.connect(inputPath)
-        print ("Opened database successfully: ", inputPath)
+        print ("Opened database successfully: " + inputPath)
 
         conn.row_factory = sqlite3.Row
         try:
@@ -201,7 +213,7 @@ def ParseRegistrationDBFile(inputPath, outputPath):
                 plist = CreatePListFromData(data)
                 writePlist(plist, plistPath)
                 print (" Plist written out successfully to " + plistPath)
-            except (InvalidPlistException, NotBinaryPlistException) as ex:
+            except (InvalidPlistException, NotBinaryPlistException, Exception) as ex:
                 print ("Error creating the plist: ", ex.args )
 
         except Exception as ex:
@@ -222,9 +234,14 @@ usage = ("Read_OfficeRegDB.py \n\n"
          "Read_OfficeRegDB.py <path to microsoftRegistrationDB.reg> <output folder>\n"
          "Example: Read_OfficeRegDB.py  c:\\microsoftRegistrationDB.reg c:\\output\n\n"
          "Output will be a Plist file and a CSV file in the provided folder.\n\n"
-         "Requirements: Python 3 and biplist\n"
-         " biplist can be installed with a simple 'pip install biplist' command"
+         "Requirements: Python (2 or 3), biplist and recent version of sqlite3\n"
+         " biplist can be installed with a simple 'pip install biplist' command\n"
+         " sqlite3 is there by default but may need to be updated if you get errors\n"
+         " If it needs updating, follow instructions in the script header."
          )
+
+print ("Using Python %i.%i" % (sys.version_info.major, sys.version_info.minor) )
+PYTHON_VER = sys.version_info.major
 
 if len(sys.argv) > 2:
     inputPath = sys.argv[1]

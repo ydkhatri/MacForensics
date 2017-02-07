@@ -51,8 +51,14 @@ import biplist
 from biplist import *
 
 def RemoveTabsNewLines(str):
-    return str.replace("\t", " ").replace("\r", " ").replace("\n", "")
+    try:
+        return str.replace("\t", " ").replace("\r", " ").replace("\n", "")
+    except:
+        pass
+    return str
     
+#def GetSafeString(item):
+
 def ProcessNotificationDb(inputPath, outputPath):
     try:
         conn = sqlite3.connect(inputPath)
@@ -72,27 +78,40 @@ def ProcessNotificationDb(inputPath, outputPath):
         try:
             print ("Trying to create file '" + outputPath + "' for writing..")
             with codecs.open(outputPath, 'w', encoding='utf-16') as csv:
-                csv.write ("Time\tShown\tBundle\tAppPath\tUUID\tTitle\tMessage\r\n")
+                csv.write ("Time\tShown\tBundle\tAppPath\tUUID\tTitle\tSubTitle\tMessage\r\n")
                 rowcount = 0
                 for row in cursor:
                     rowcount += 1
-                    title   = ''
-                    message = ''
+                    title    = ''
+                    subtitle = ''
+                    message  = ''
                     try:
                         plist = readPlistFromString(row['dataPlist'])
+                        title_index = 2 # by default
+                        subtitle_index = -1 # mostly absent!
+                        text_index = 3 # by default
                         try:
-                            title = RemoveTabsNewLines(plist['$objects'][2])
-                        except:
-                            pass
+                            title_index = int(plist['$objects'][1]['NSTitle'])
+                        except: pass
                         try:
-                            message = RemoveTabsNewLines(plist['$objects'][3])
-                        except:
-                            pass
-                        
+                            subtitle_index = int(plist['$objects'][1]['NSSubtitle'])
+                        except: pass
+                        try:
+                            text_index = int(plist['$objects'][1]['NSInformativetext'])
+                        except: pass
+                        try:
+                            title = RemoveTabsNewLines(plist['$objects'][title_index])
+                        except: pass
+                        try:
+                            subtitle = RemoveTabsNewLines(plist['$objects'][subtitle_index]) if subtitle_index > -1 else ""
+                        except: pass                        
+                        try:
+                            message = RemoveTabsNewLines(plist['$objects'][text_index])
+                        except: pass
                     except (InvalidPlistException, NotBinaryPlistException, Exception) as e:
                         print ("Invalid plist in table.", e )
                     try:
-                        csv.write ('%s\t%s\t%s\t%s\t%s\t%s\t%s\r\n' %(row['time'], row['shown'], row['bundle'], row['appPath'], row['uuid'], title, message))
+                        csv.write ('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\r\n' %(row['time'], row['shown'], row['bundle'], row['appPath'], row['uuid'], title, subtitle, message))
                     except Exception as ex:
                         print ("Error while writing to file, error details:\n", ex.args)
                 print ("Finished processing! Wrote " + str(rowcount) + " rows of data.")
@@ -124,6 +143,7 @@ if len(sys.argv) > 2:
     try:
         if os.path.exists(inputPath):
             ProcessNotificationDb(inputPath, outputPath)
+
         else:
             print("Error: Failed to find file at specified path. Path was : " + inputPath)
     except Exception as ex:

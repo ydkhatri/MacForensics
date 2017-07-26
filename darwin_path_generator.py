@@ -71,8 +71,8 @@ def GetDarwinPath2(uuid, uid):
 root_uuid='FFFFEEEEDDDDCCCCBBBBAAAA00000000'
 root_uid = 0
 
-path_on_older_mac = GetDarwinPath2(root_uuid, root_uid)
-path_on_newer_mac = GetDarwinPath(root_uuid, root_uid)
+path_on_older_mac = GetDarwinPath(root_uuid, root_uid)
+path_on_newer_mac = GetDarwinPath2(root_uuid, root_uid)
 
 print('Darwin folder path for root on older macs is /var/folders/' + path_on_older_mac)
 print('Darwin folder path for root on newer macs is /var/folders/' + path_on_newer_mac)

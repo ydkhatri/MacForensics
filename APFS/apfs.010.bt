@@ -1,0 +1,799 @@
+//------------------------------------------------
+//--- 010 Editor v8.0.1 Binary Template
+//
+//      File: Apfs.bt
+//   Authors: Yogesh Khatri <yogesh@swiftforensics.com>
+//   Version: 1.0
+//   Purpose: Read APFS structures
+//  Category: File Systems
+// File Mask: 
+//  ID Bytes: 
+//   History: 
+//    Notes : This is the 010 port for Apfs.ksy with a few additional mods/fixes.
+//            Original apfs.ksy available at https://github.com/cugu/apfs.ksy
+//            The latest version of this template can be obtained here:
+//             https://github.com/ydkhatri/MacForensics/APFS/apfs.010.bt
+//    Usage : Set the Apfs_Offset variable on line 23 to the start of the APFS 
+//            container, then run.
+//  License : MIT
+//------------------------------------------------
+
+
+//globals
+local uint64 Apfs_Offset = 0; // <---- Set this to wherever your APFS container starts
+local uint Block_Size = 4096; //default, we set this to actual later
+local uint Follow_Pointer = true;
+local uint64 Current_Block_Offset = 0;
+
+//forward declarations
+struct obj;
+int SeekBlock(uint64 block_id);
+
+// enums
+typedef enum <ushort> {
+    obj_type_container_superblock = 1,
+    obj_type_rootnode = 2,
+    obj_type_node = 3, 
+    obj_type_space_manager = 5, 
+    obj_type_spaceman_internal_pool= 7, 
+    obj_type_btree = 11, 
+    obj_type_checkpoint = 12, 
+    obj_type_volume_superblock = 13, 
+    obj_type_reaper = 17, 
+    obj_type_18_unknown = 18,
+    obj_type_32_unknown = 32 
+} obj_type;
+
+typedef enum <ushort> {
+    obj_subtype_empty = 0, 
+    obj_subtype_history = 9, 
+    obj_subtype_omap = 11, 
+    obj_subtype_files = 14, 
+    obj_subtype_extents = 15, 
+    obj_subtype_unknown = 16 
+} obj_subtype;
+ 
+typedef enum <uint64> {
+    tree_type_om_tree = 0, 
+    tree_type_fs_tree = 1
+} tree_type;
+
+typedef enum <uint> {
+    features_case_insensitive = 1,
+    features_unknown_type4 = 4,
+    features_case_sensitive = 8 
+} features <read=ReadFeatures>;
+
+string ReadFeatures(features & f) {
+  local string ret = "";
+  SPrintf(ret, "(%d) ", f);
+  if (f & features_case_insensitive) ret += "case_insensitive,";
+  if (f & features_unknown_type4)    ret += "encrypted?,";
+  if (f & features_case_sensitive)   ret += "case_sensitive,";
+  if (Strcmp(ret[Strlen(ret)-1], ",") == 0)
+      ret = StrDel(ret, Strlen(ret)-1, 1);
+  return ret;
+}
+
+typedef enum <uint> {
+    kind_omap = 0x0, 
+    kind_lookup = 0x2, 
+    kind_inode = 0x3, 
+    kind_xattr = 0x4, 
+    kind_sibling = 0x5, 
+    kind_extent_refcount = 0x6, 
+    kind_extent = 0x8, 
+    kind_drec = 0x9, 
+    kind_sibling_map = 0xc,
+    kind_unknown_d = 0xd
+} kind;
+
+string ReadKind(uint k) {
+  local string ret = "";
+  switch (k) {
+    case kind_omap: return "kind_omap (0)"; break;
+    case kind_lookup: return "kind_lookup (2)"; break; 
+    case kind_inode: return "kind_inode (3)"; break; 
+    case kind_xattr: return "kind_xattr (4)"; break;
+    case kind_sibling: return "kind_sibling (5)"; break;
+    case kind_extent_refcount: return "kind_extent_refcount (6)"; break;
+    case kind_extent:  return "kind_extent (8)"; break;
+    case kind_drec: return "kind_drec (9)"; break;
+    case kind_sibling_map: return "kind_sibling_map (12)"; break;
+    default: { 
+        Sprintf(ret, "%s (%d)",  "Unknown", k);
+        return ret;
+    }
+  }
+  return ret;
+}
+
+typedef enum  <ushort> {
+    xfield_type_name = 516, 
+    xfield_type_size = 8200,
+    xfield_type_document_id = 8707,
+    xfield_type_device_node = 8718, 
+    xfield_type_sparse_size = 10253 
+    // Undiscoverd xfield_types,
+    //   Dstream
+    //   Dir_Stats_key
+    //   Uuid
+    //   Sparse_bytes
+} xfield_type;
+
+typedef enum <ushort> {
+    item_type_named_pipe = 1, 
+    item_type_character_special = 2, 
+    item_type_directory = 4, 
+    item_type_block_special = 6, 
+    item_type_regular = 8, 
+    item_type_symbolic_link = 10, 
+    item_type_socket = 12, 
+    item_type_whiteout = 14
+} item_type;
+
+typedef enum <ushort> {
+    ea_type_generic = 2, 
+    ea_type_symlink = 6
+} ea_type ;
+
+string ApfsTimeRead( uint64 & t )
+{   
+    // Convert to FILETIME
+    return FileTimeToString( t/100L + 116444736000000000L );
+}
+
+typedef struct {
+    BigEndian();
+    uint Data1 <format=hex>;
+    ushort  Data2 <format=hex>;
+    ushort  Data3 <format=hex>;
+    ushort  Data4 <format=hex>;
+    ubyte  Data5[6] <format=hex>;
+    LittleEndian();
+} Uuid <read=ReadUUID>;
+
+string ReadUUID (Uuid  & g){
+    local string ret;
+    SPrintf(ret, "%08x-%04x-%04x-%04x-%02x%02x%02x%02x%02x%02x", g.Data1, g.Data2, g.Data3, g.Data4, g.Data5[0], g.Data5[1], g.Data5[2], g.Data5[3], g.Data5[4], g.Data5[5]);
+    return ret;
+}
+
+// reference obj
+// This structure is unused now as it has been inlined everywhere due to 
+// limitation on the number of nested structures you can view in 010 gui.
+typedef struct {
+    local uint64 pos = FTell();
+    uint64 val;
+    if (val == 0)
+        Printf("\n%s\n", "val was 0 in obj_ref!! Not defining obj!!");
+    else if (SeekBlock(val) != 0)
+        Printf("\n%s\n", "val was invalid in obj_ref!! Not defining obj!!");
+    else
+        obj object;
+
+    FSeek(pos + 8);
+} ref_obj;
+
+// container_superblock (type: 0x01)
+typedef struct {
+    local uint64 pos = FTell();
+    char   magic[4]; // NXSB
+    uint   block_size;
+    uint64 block_count;
+    uint64 features_0;
+    uint64 read_only_compatible_features;
+    uint64 incompatible_features;
+    Uuid   uuid;
+    uint64 next_oid;
+    uint64 next_xid;
+    uint   xp_desc_blocks;
+    uint   xp_data_blocks;
+    uint64 xp_desc_base;
+    uint64 xp_data_base;
+    uint   xp_desc_len;
+    uint   xp_data_len;
+    uint   xp_desc_index;
+    uint   xp_desc_index_len;
+    uint   xp_data_index;
+    uint   xp_data_index_len;
+    uint64 spaceman_oid;
+    //ref_obj omap_oid; //inlined
+    //// BEGIN ref_obj
+    local uint64 rpos = FTell();
+    uint64 omap_oid;
+    if (omap_oid == 0)
+        Printf("\n%s\n", "omap_oid was 0 in obj_ref!! Not defining omap!!");
+    else if (SeekBlock(omap_oid) != 0)
+        Printf("\n%s\n", "omap_oid was invalid in obj_ref!! Not defining omap!!");
+    else
+        obj omap;
+    FSeek(rpos + 8);
+    //// END ref_obj
+    uint64 reaper_oid;
+    uint   pad2;
+    uint   max_file_systems;
+    uint64 fs_oids[max_file_systems];
+    if (max_file_systems < 100)
+        uint64 padding[100 - max_file_systems];
+    uint   unknown_version <format=hex>; // seems to be incremental, block0 has highest number
+
+    // checkpoint
+    SeekBlock(xp_desc_base + xp_desc_index);
+    obj checkpoint;
+    // spaceman
+    SeekBlock(xp_data_base + xp_data_index);
+    obj spaceman;
+} container_superblock;
+
+
+//// node entry keys
+typedef struct {
+    uint64 obj_id : 60;
+    uint64 kind_0 : 04 <read=ReadKind>;
+} key_hdr;
+
+typedef struct {
+}  empty_key;
+
+typedef struct { 
+    uint64 xid;
+} omap_key;
+
+typedef struct {
+    uint64  xid;
+    //ref_obj obj_id; //inlined
+    //// BEGIN ref_obj
+    local uint64 rpos = FTell();
+    uint64 oid;
+    if (oid == 0)
+        Printf("\n%s\n", "oid was 0 in obj_ref!! Not defining history_object!!");
+    else if (SeekBlock(oid) != 0)
+        Printf("\n%s\n", "oid was invalid in obj_ref!! Not defining history_object!!");
+    else
+        obj history_object;
+    FSeek(rpos + 8);
+    //// END ref_obj
+} history_key;
+
+typedef struct {
+    //ref_obj offset;
+    uint64 offset_ref_obj:60; // seen
+    uint64 kind_1        :04;
+} lookup_key;
+
+typedef struct {
+    ubyte name_length;
+    byte  hash[3];
+    char  name[ name_length ];
+} drec_key <read=ReadDrec_Key>;
+
+string ReadDrec_Key(drec_key & d) {
+  return d.name;
+}
+
+typedef struct {
+    ushort  name_length;
+    char    name[ name_length ];
+} xattr_key <read=ReadXattr_Key>;
+
+string ReadXattr_Key(xattr_key & d) {
+  return d.name;
+}
+
+typedef struct { 
+    uint64 object;
+} sibling_key;
+
+typedef struct {  
+    uint64 offset; // seek pos in file
+} extent_key;
+
+//// node entry vals
+
+typedef struct { // for any index nodes
+    if (Follow_Pointer) {
+        //ref_obj val; //inlined
+        //// BEGIN ref_obj
+        local uint64 rpos = FTell();
+        uint64 val;
+        if (val == 0)
+            Printf("\n%s\n", "val was 0 in obj_ref!! Not defining obj!!");
+        else if (SeekBlock(val) != 0)
+            Printf("\n%s\n", "val was invalid in obj_ref!! Not defining obj!!");
+        else
+            obj object;
+        FSeek(rpos + 8);
+        //// END ref_obj
+    }
+    else
+        uint64 pointer;
+} pointer_val;
+
+typedef struct { // ???
+    uint  unknown_0;
+    uint  unknown_4;
+} history_val;
+
+typedef struct {  // 0x00
+    uint flags;
+    uint size;
+    //ref_obj paddr; //inlined
+    //// BEGIN ref_obj
+    local uint64 rpos = FTell();
+    uint64 paddr;
+    if (paddr == 0)
+        Printf("\n%s\n", "paddr was 0 in obj_ref!! Not defining omap!!");
+    else if (SeekBlock(paddr) != 0) // outside disk image!
+        Printf("\n%s\n", "paddr invalid in obj_ref!! Not defining omap!!"); 
+    else
+        obj omap;
+    FSeek(rpos + 8);
+    //// END ref_obj
+} omap_val;
+
+typedef struct {  
+    xfield_type type;
+    ushort      length;
+} xf_header;
+
+typedef struct {
+    char name[];
+} xf_name;
+
+typedef struct {
+    uint64 size;
+    uint64 stored_size;
+    uint64 unknown_16;
+    uint64 unknown_size; // could be compressed size
+    uint64 unknown_32;
+} xf_size;
+
+typedef struct {  
+    uint major_minor ; // Works around lack of a u3 type
+} xf_device_node;
+
+uint get_xf_device_node_major(xf_device_node & xdn) {
+    return xdn.major_minor >> 24;
+}
+
+uint get_xf_device_node_minor(xf_device_node & xdn) {
+    return xdn.major_minor & 0xFFFFFF;
+}
+
+typedef struct { 
+    uint64 size;
+} xf_sparse_size;
+
+typedef struct { 
+    uint id;
+} xf_document_id;
+
+typedef struct {  // 0x30
+    uint64 parent_id;
+    uint64 extents_id;
+    uint64 creation_timestamp <read=ApfsTimeRead>;
+    uint64 modified_timestamp <read=ApfsTimeRead>;
+    uint64 changed_timestamp <read=ApfsTimeRead>;
+    uint64 accessed_timestamp <read=ApfsTimeRead>;
+    uint64 flags;
+    uint   nchildren_or_nlink;
+    uint   unknown_60;
+    uint   unknown_64;
+    uint   bsdflags;
+    uint   owner_id;
+    uint   group_id;
+    ushort mode <format=octal>;
+    ushort unknown_82;
+    uint   unknown_84;
+    uint   unknown_88;
+    ushort xf_num_exts; // File 0x02 or Folder 0x01 cmp. TN1150
+    ushort xf_used_data;
+    xf_header xf_hdr[xf_num_exts];
+    local uint _index = 0;
+	for (_index =0; _index < xf_num_exts; _index++) {
+        switch (xf_hdr[_index].type) {
+            case xfield_type_name: xf_name x_name; break;
+            case xfield_type_size: xf_size x_size; break;
+            case xfield_type_device_node: xf_device_node x_dev_node; break;
+            case xfield_type_sparse_size: xf_sparse_size x_sp_size; break;
+            case xfield_type_document_id: xf_document_id x_doc_id; break;
+			default: {
+                byte xf_data[xf_hdr[_index].length];
+                Printf("\nUnknown xfield_type 0x%X", xf_hdr[_index].type);
+            }
+		}
+        if 	(((8 - xf_hdr[_index].length) % 8) > 0)
+            byte padding[((8 - xf_hdr[_index].length) % 8)];
+    }
+} inode_val;
+
+typedef struct {   // 0x50
+    uint64 node_id;
+    ushort length;
+    char name[length];
+} sibling_val;
+
+typedef struct { // 0x60
+    uint count;
+} extent_refcount_val;
+
+typedef struct { // 0x20
+    uint   block_count;
+    ushort unknown_4;
+    ushort block_size;
+    uint64 inode;
+    uint   unknown_16;
+} lookup_val;
+
+typedef struct { // 0x80
+    uint64  len;
+    uint64  phys_block_num; //error in ksy  spec, this is NOT ref_obj
+    uint64  flags;
+} extent_val;
+
+typedef struct { // 0x90
+    uint64 node_id;
+    uint64 timestamp <read=ApfsTimeRead>;
+    item_type type_item;
+} drec_val;
+
+typedef struct {  // 0xc0
+    uint64 map_node_id;
+} sibling_map_val;
+
+typedef struct {   // 0x40 xattr_val
+    ea_type type;
+    ushort  data_length;
+	switch (type) {
+        case ea_type_symlink: char symbolic_link[]; break; // symlink
+        default: {
+            if (data_length)
+                byte data[data_length]; 
+            break;
+        }
+    }
+} xattr_val;
+
+//// node entries
+typedef struct {
+    local uint64 pos = FTell();
+    short  key_offset;
+	if ((parentof(this).node_type & 4) == 0)
+        ushort key_length;       
+    short  data_offset;
+	if ((parentof(this).node_type & 4) == 0)
+        ushort data_length;
+    local uint64 pos2 = FTell();
+
+    FSeek(parentof(parentof(this)).obj_start_off + key_offset + parentof(this).keys_offset + 56); //key_hdr
+    key_hdr key_header <bgcolor=cRed>;
+    
+    switch(key_header.kind_0) {
+        case kind_omap: omap_key key <bgcolor=cBlue>; /*Printf("\nOmapkey @ node @ pos 0x%LX", pos);*/ break;
+        case kind_lookup: lookup_key key; break;
+        case kind_inode: /*empty_key key;*/ break;
+        case kind_xattr: xattr_key key; break;
+        case kind_sibling: sibling_key key; break;
+        case kind_extent_refcount: /*empty_key key; */break;
+        case kind_extent: extent_key key; break;
+        case kind_drec: drec_key key; break;
+        case kind_sibling_map: /*empty_key key;*/ break;
+        default: Printf("\nKey type not seen 0x%X", key_header.kind_0); break;
+    }
+    
+    FSeek(parentof(parentof(this)).obj_start_off + Block_Size - data_offset - 40 * (parentof(this).node_type & 1)); // val
+    local uint test = (parentof(this).level > 0) ? 256 : key_header.kind_0;
+    switch(test) {
+        case 256: {
+            if (key_header.kind_0 == kind_extent_refcount || 
+                key_header.kind_0 == kind_extent || 
+                key_header.kind_0 == kind_drec || 
+                key_header.kind_0 == kind_xattr || 
+                key_header.kind_0 == kind_inode ||
+                key_header.kind_0 == kind_sibling ||
+                key_header.kind_0 == kind_sibling_map)
+                uint64 val <bgcolor=cLtGreen>;
+            else {
+                //pointer_val v_pointer; //inlining this
+                if (Follow_Pointer) {
+                    //ref_obj val; //inlined
+                    //// BEGIN ref_obj
+                    local uint64 rpos = FTell();
+                    uint64 oid;
+                    if (oid == 0)
+                        Printf("\n%s\n", "oid was 0 in obj_ref!! Not defining val!!");
+                    else if (SeekBlock(oid) != 0) // outside disk image!
+                        Printf("\n%s\n", "oid invalid in obj_ref!! Not defining val!!"); 
+                    else
+                        obj val;
+                    FSeek(rpos + 8);
+                    //// END ref_obj
+                }
+                else
+                    uint64 pointer;
+            }
+            break;// applies to all pointer vals, i.e. any entry val in index nodes
+        }
+        case kind_omap: omap_val val ; break;
+        case kind_lookup: lookup_val val; break;
+        case kind_inode: inode_val val; break;
+        case kind_xattr: xattr_val val; break;
+        case kind_sibling: sibling_val val; break;
+        case kind_extent_refcount: extent_refcount_val val; break;
+        case kind_extent: extent_val val <bgcolor=0x52D456>; break;
+        case kind_drec: drec_val val <bgcolor=0xc2f416>; break;
+        case kind_sibling_map: sibling_map_val val; break;
+    }
+    FSeek(pos2);
+} node_entry;
+
+// node (type: 0x02)
+typedef struct {
+    ushort node_type;
+    ushort level; // Zero for leaf nodes, > 0 for index nodes
+    uint   entry_count;
+    ushort unknown_40;
+    ushort keys_offset;
+    ushort keys_length;
+    ushort data_offset;
+    uint64 unknown_48 <format=hex>;
+    if (entry_count)
+        node_entry entries[entry_count] <optimize=false>;
+} node;
+
+// space_manager (type: 0x05)
+typedef struct {
+    local uint64 pos = FTell();
+    uint   block_size;
+    uint   blocks_per_chunk;
+    uint   chunks_per_cib;
+    uint   cibs_per_cab;
+    uint   block_count;
+    uint   chunk_count;
+    uint   cib_count;
+    uint   cab_count;
+    uint   entry_count;
+    uint   unknown_68;
+    uint64 free_block_count;
+    uint   entries_offset;
+    byte   unknown_84[92];
+    uint64 prev_spaceman_internal_pool_block;
+    SeekBlock(prev_spaceman_internal_pool_block);
+    obj    prev_spaceman;
+    if (entry_count) {
+        FSeek(pos - 0x20 + entries_offset);
+        local uint i;
+        local uint64 pos2 = FTell();
+        for (i=0; i < entry_count; i++) {
+            uint64 spaceman_internal_pool_block;
+            SeekBlock(spaceman_internal_pool_block);
+            obj spaceman_internal_pool;            
+            FSeek(pos2 + 8*(i+1));
+        }
+    }
+    else
+        FSeek(pos + 152); //prevent error about struct end offset < start
+} space_manager;
+
+typedef struct {
+    uint64 xid;
+    uint64 num_preceeding_blocks; // number of blocks before this one
+    uint   block_count;
+    uint   free_block_count;
+    uint64 bitmap_block;
+} spaceman_internal_pool_entry;
+
+// spaceman internal pool (type: 0x07)
+typedef struct {
+    uint unknown_32;
+    uint entry_count;
+    if (entry_count)
+        spaceman_internal_pool_entry entries[entry_count] <optimize=false>;
+} spaceman_internal_pool;
+
+// btree (type: 0x0b)
+typedef struct { 
+    tree_type btree_type;
+    uint64    unknown_0 <format=hex>;
+    //ref_obj   root; //inlined
+    //// BEGIN ref_obj
+    local uint64 rpos = FTell();
+    uint64 root_oid;
+    if (root_oid == 0)
+        Printf("\n%s\n", "root_oid was 0 in obj_ref!! Not defining root!!");
+    else if (SeekBlock(root_oid) != 0) // outside disk image!
+        Printf("\n%s\n", "root_oid invalid in obj_ref!! Not defining root!!"); 
+    else
+        obj root;
+    FSeek(rpos + 8);
+    //// END ref_obj
+} btree;
+
+typedef struct {
+    obj_type type;
+    ushort   flags;
+    uint     subtype; // enum: obj_subtype
+    uint     size;
+    uint     unknown_52;
+    uint     unknown_56;
+    uint     unknown_60;
+    uint64   oid;
+    //ref_obj  object; //inlined
+    //// BEGIN ref_obj
+    local uint64 rpos = FTell();
+    uint64 checkpoint_oid;
+    if (checkpoint_oid == 0)
+        Printf("\n%s\n", "checkpoint_oid was 0 in obj_ref!! Not defining checkpoint!!");
+    else if (SeekBlock(checkpoint_oid) != 0) // outside disk image!
+        Printf("\n%s\n", "checkpoint_oid invalid in obj_ref!! Not defining checkpoint!!"); 
+    else
+        obj checkpoint;
+    FSeek(rpos + 8);
+    //// END ref_obj
+} checkpoint_entry;
+
+// checkpoint (type: 0x0c)
+typedef struct {
+    uint   unknown_0  <format=hex>;
+    uint   entry_count;
+    if (entry_count)
+        checkpoint_entry entries[entry_count] <optimize=false>;
+} checkpoint;
+
+typedef struct {
+    char   id[32];
+    uint64 timestamp <read=ApfsTimeRead>;
+    uint64 last_xid;
+} volume_access_info;
+
+// volume_superblock (type: 0x0d)
+typedef struct {  // missing: next_obj_id, fs_flags, unmount_time
+    char   magic[4]; // APSB
+    uint   fs_index;
+    byte   unknown_40[16];
+    features   features_0;
+    byte   unknown_60[12]; // readonly_compatible_features, incompatible_features
+    uint64 fs_reserve_block_count;
+    uint64 fs_quota_block_count;
+    uint64 fs_alloc_count;
+    byte   unknown_92[32]; // root_tree_type, extentref_tree_type, snap_meta_tree_type
+    //ref_obj omap_oid; // 'Maps node IDs to the inode Btree nodes'  //inlined
+    //// BEGIN ref_obj
+    local uint64 rpos = FTell();
+    uint64 omap_oid;
+    if (omap_oid == 0)
+        Printf("\n%s\n", "omap_oid was 0 in obj_ref!! Not defining omap!!");
+    else if (SeekBlock(omap_oid) != 0) // outside disk image!
+        Printf("\n%s\n", "omap_oid invalid in obj_ref!! Not defining omap!!"); 
+    else
+        obj omap;
+    FSeek(rpos + 8);
+    //// END ref_obj
+    uint64 root_tree_oid;
+    //ref_obj extentref_tree_oid; /// 'Maps file extents to inodes' //inlined
+    //// BEGIN ref_obj
+    rpos = FTell();
+    uint64 extentref_tree_oid;
+    if (extentref_tree_oid == 0)
+        Printf("\n%s\n", "extentref_tree_oid was 0 in obj_ref!! Not defining extentref_tree!!");
+    else if (SeekBlock(extentref_tree_oid) != 0) // outside disk image!
+        Printf("\n%s\n", "extentref_tree_oid invalid in obj_ref!! Not defining extentref_tree!!"); 
+    else
+        obj extentref_tree;
+    FSeek(rpos + 8);
+    //// END ref_obj
+    //ref_obj snap_meta_tree_oid; //inlined
+    //// BEGIN ref_obj
+    rpos = FTell();
+    uint64 snap_meta_tree_oid;
+    if (snap_meta_tree_oid == 0)
+        Printf("\n%s\n", "snap_meta_tree_oid was 0 in obj_ref!! Not defining snap_meta_tree!!");
+    else if (SeekBlock(snap_meta_tree_oid) != 0) // outside disk image!
+        Printf("\n%s\n", "snap_meta_tree_oid invalid in obj_ref!! Not defining snap_meta_tree!!"); 
+    else
+        obj snap_meta_tree;
+    FSeek(rpos + 8);
+    //// END ref_obj
+    byte   unknown_160[16]; // revert_to_xid, total_blocks_freed?
+    uint64 next_doc_id; // next_obj_id?
+    uint64 num_files;
+    uint64 num_directories;
+    uint64 num_symlinks;
+    uint64 num_other_fsobjects;
+    uint64 num_snapshots;
+    uint64 unknown_112; // revert_to_xid, total_blocks_freed?
+    uint64 unknown_120; // revert_to_xid, total_blocks_freed?
+    Uuid   vol_uuid;
+    uint64 last_mod_time <read=ApfsTimeRead>;
+    uint64 initial_xid;
+    volume_access_info formatted_by;
+    volume_access_info modified_by[8];
+    char   volname[];
+} volume_superblock;
+
+
+typedef struct {
+    uint64 unknown0;
+    uint64 unknown8;
+    uint64 unknowns[10];
+} reaper;
+
+typedef struct {
+    uint64 cksum; // Flechters checksum, according to the docs.
+    uint64 oid;   // ID of the obj itself. Either the position of the obj or an incrementing number starting at 1024.
+    uint64 xid;   // Incrementing version number of the xid of the obj (highest == latest)
+    obj_type type; 
+    ushort flags <format=hex>; // 0x4000 oid = position, 0x8000 = container
+    obj_subtype subtype; // enum: obj_subtype
+    ushort pad;
+} obj_header <size=32>;
+
+typedef struct {
+    local uint64 obj_start_off = FTell();
+    //Printf("\n Obj @ %LX", obj_start_off);
+    obj_header hdr;
+    switch ( hdr.type )
+	{
+        case obj_type_container_superblock: container_superblock body; break;
+        case obj_type_rootnode: node body; break;
+        case obj_type_node: node body; break;
+        case obj_type_space_manager: space_manager body; break;
+        case obj_type_spaceman_internal_pool: spaceman_internal_pool body; break;
+        case obj_type_btree: btree body; break;
+        case obj_type_checkpoint: checkpoint body; break;
+        case obj_type_volume_superblock: volume_superblock body; break;
+        case obj_type_reaper: reaper rp_body; break;
+        case obj_type_18_unknown: Printf("\nType 18 obj header type 0x%X @ 0x%LX", hdr.type, obj_start_off); break;
+        case obj_type_32_unknown: Printf("\nType 32 obj header type 0x%X @ 0x%LX", hdr.type, obj_start_off); break;
+		default: Printf("\nUnknown obj header type 0x%X @ 0x%LX", hdr.type, obj_start_off); /*Exit(3);*/ break; 
+    }
+} obj <size=GetObjSize>;
+
+int GetObjSize(obj & o) {
+    return Block_Size;
+}
+
+int SeekBlock(uint64 block_id) {
+    Current_Block_Offset = Apfs_Offset + (block_id * Block_Size);
+    return FSeek(Current_Block_Offset);
+}
+
+uint CheckApfsAndSetBlockSize() {
+    local uint64 pos = FTell();
+    FSkip(32);
+    if (ReadUInt() == 0x4253584E) { // NXSB
+        FSkip(4);
+        Block_Size = ReadUInt();
+        FSeek(pos);
+        return true;
+    }
+    FSeek(pos);
+    return false;
+}
+
+void BookmarkVolumes(obj & csb) {
+    local uint i;
+    local string vol_name = "";
+    for (i=0; i < csb.body.omap.body.root.body.entry_count; ++i) {
+        vol_name = csb.body.omap.body.root.body.entries[i].val.omap.body.volname;
+        Printf("\nVol name = %s", vol_name);
+        SeekBlock(csb.body.omap.body.root.body.entries[i].val.paddr);
+        obj vol <comment=GetVolName>;
+    }
+}
+
+string GetVolName(obj & vsb) {
+    return vsb.body.volname;
+}
+
+//MAIN
+FSeek(Apfs_Offset);
+
+if (!CheckApfsAndSetBlockSize()) {
+    Printf("\nError, starting point not an APFS container superblock. Set the 'Apfs_Offset' variable to correct value!");
+    Exit(1);
+}
+
+obj csb;//container super block
+BookmarkVolumes(csb);

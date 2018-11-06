@@ -8,3 +8,4 @@ Read_OfficeRegDB.py | Parse MS Office created sqlite db (microsoftRegistrationDB
 macNotifications.py | Parse Mac Notifications db
 darwin_path_generator.py | DARWIN_USER_ folders name generation algorithm (those seemingly random folder names under /var/folders/)
 Domain_Info/Read_ConfigProfiles.py | Reads user profile information for AD domain users from the ConfigProfiles.binary file
+DotUnderscore_macos.bt | An 010 template for parsing extended attribute files that begin with ._

@@ -1,0 +1,73 @@
+//------------------------------------------------
+//--- 010 Editor v8.0.1 Binary Template
+//
+//      File: ._ files on macOS
+//   Authors: Yogesh Khatri <yogesh@swiftforensics.com>
+//   Version: 0.1
+//   Purpose: Reading files that begin with ._ like ._ABC.jpg
+//  Category: macOS
+// File Mask: 
+//  ID Bytes: 00051607
+//   History: Last Updated Nov 6 2018
+//------------------------------------------------
+
+
+// All values in Big Endian
+
+typedef struct {
+  uint   Magic;         // 00 05 16 07
+  ushort Version;       // 00 02 
+  ushort Reserved;      // 00 00
+  char   Macosx[16];    // "Mac OS X        "
+  ushort Unknown1;      // 00 02
+  uint   Unknown2;      // 00 00 00 09 
+  uint   HeaderLength;  // 00 00 00 32 
+  uint   DataLength;
+  uint   Unknown3;      // 00 00 00 02
+  uint   LogicalFileSize;
+  uint   UnusedFileSpace; 
+
+} Header <bgcolor=cYellow>;
+
+typedef struct {
+  local uint64 pos;
+  uint   ValueOffset;
+  uint   ValueLen;
+  ushort Unknown;       // 00 00 
+  ubyte  NameLen;
+  char   Name[NameLen];
+  if (FTell()%4)
+    byte   Padding[4 - (FTell()%4)];
+  // Bookmarking data too!
+  pos = FTell();
+  FSeek(ValueOffset);
+  byte   Value[ValueLen] <bgcolor=cLtGreen>;
+  FSeek(pos);
+} AttrDefinition <read=ReadAttrDef, bgcolor=cRed>;
+
+string ReadAttrDef(AttrDefinition &a) {
+  return a.Name;
+}
+
+typedef struct {
+  char   Signature[4]; //"ATTR"
+  uint   Unknown1;
+  uint   LogicalFileSize;
+  uint   ValuesOffset;
+  uint   ValuesLen;
+  uint   Unknown3; // 0
+  uint   Unknown4; // 0
+  uint   Unknown5; // 0
+  uint   NumAttributes;
+} ATTR_Header <bgcolor=cBlue>;
+
+
+BigEndian();
+Header header;
+FSkip(0x22); // unknown
+ATTR_Header attr_head;
+local uint i;
+for (i=0; i<attr_head.NumAttributes; ++i)
+{
+  AttrDefinition attr_def;
+}

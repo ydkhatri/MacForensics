@@ -3,31 +3,15 @@
 //
 //      File: ._ files on macOS
 //   Authors: Yogesh Khatri <yogesh@swiftforensics.com>
-//   Version: 0.1
+//   Version: 0.2
 //   Purpose: Reading files that begin with ._ like ._ABC.jpg
 //  Category: macOS
 // File Mask: 
 //  ID Bytes: 00051607
-//   History: Last Updated Nov 6 2018
+//   History: Last Updated Nov 8 2018
 //------------------------------------------------
 
-
 // All values in Big Endian
-
-typedef struct {
-  uint   Magic;         // 00 05 16 07
-  ushort Version;       // 00 02 
-  ushort Reserved;      // 00 00
-  char   Macosx[16];    // "Mac OS X        "
-  ushort Unknown1;      // 00 02
-  uint   Unknown2;      // 00 00 00 09 
-  uint   HeaderLength;  // 00 00 00 32 
-  uint   DataLength;
-  uint   Unknown3;      // 00 00 00 02
-  uint   LogicalFileSize;
-  uint   UnusedFileSpace; 
-
-} Header <bgcolor=cYellow>;
 
 typedef struct {
   local uint64 pos;
@@ -61,13 +45,42 @@ typedef struct {
   uint   NumAttributes;
 } ATTR_Header <bgcolor=cBlue>;
 
+typedef struct {
+  uint  Id;
+  uint  Offset;
+  uint  Size;
+  
+  local uint64 pos = FTell();
+  // Seek to Entry
+  local uint i;
+  FSeek(Offset);
+  if (Id == 9) {
+    byte Unknown[0x22];
+    ATTR_Header attr_head;
+    if (attr_head.Signature != "ATTR")
+      Warning("Not the right ATTR signature!");
+    for (i=0; i<attr_head.NumAttributes; ++i)
+      AttrDefinition attr_def;
+  }
+  else if (Id == 2) { // Resource Fork
+    byte ResourceFork[Size];
+  }
+  FSeek(pos);
+} Entry;
+
+typedef struct {
+  uint   Magic;         // 00 05 16 07
+  ushort Version;       // 00 02 
+  ushort Reserved;      // 00 00
+  char   Macosx[16];    // "Mac OS X        "
+  ushort NumEntries;    // 00 02
+} Header <bgcolor=cYellow>;
+
 
 BigEndian();
 Header header;
-FSkip(0x22); // unknown
-ATTR_Header attr_head;
-local uint i;
-for (i=0; i<attr_head.NumAttributes; ++i)
-{
-  AttrDefinition attr_def;
+if (header.Magic != 0x00051607) {
+  Warning("Not the right signature, exiting!");
+  return;
 }
+Entry entry[header.NumEntries] <optimize=false>;

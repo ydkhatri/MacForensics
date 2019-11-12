@@ -17,7 +17,7 @@
 #
 # Script Name  : DeSerializer.py
 # Author       : Yogesh Khatri
-# Last Updated : Oct 1 2019
+# Last Updated : Nov 12 2019
 # Purpose      : NSKeyedArchive plists (such as .SFL2 files) are stored as 
 #                serialized data, which is machine readable but not human
 #                readable. This script will convert NSKeyedArchive binary 
@@ -38,42 +38,46 @@ import os
 import sys
 import traceback
 
-def recurseCreatePlist(plist, root):
+def recurseCreatePlist(plist, root, object_table):
     if isinstance(root, dict):
         for key, value in root.items():
             if key == '$class': 
                 continue
             v = None
-            if isinstance(value, list):
+            if isinstance(value, ccl_bplist.BplistUID):
+                v = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
+            elif isinstance(value, list):
                 v = []
-                recurseCreatePlist(v, value)
+                recurseCreatePlist(v, value, nsa_plist)
             elif isinstance(value, dict):
                 v = {}
-                recurseCreatePlist(v, value)
+                recurseCreatePlist(v, value, nsa_plist)
             else:
                 v = value
             plist[key] = v
     else: # must be list
         for value in root:
             v = None
-            if isinstance(value, list):
+            if isinstance(value, ccl_bplist.BplistUID):
+                v = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
+            elif isinstance(value, list):
                 v = []
-                recurseCreatePlist(v, value)
+                recurseCreatePlist(v, value, nsa_plist)
             elif isinstance(value, dict):
                 v = {}
-                recurseCreatePlist(v, value)
+                recurseCreatePlist(v, value, nsa_plist)
             else:
                 v = value
             plist.append(v)
 
-def getRootElementNames(plist_path):
+def getRootElementNames(f):
     ''' The top element is usually called "root", but sometimes it is not!
         Hence we retrieve the correct name here. In some plists, there is
         more than one top element, this function will retrieve them all.
     '''
     roots = []
     try:
-        plist = biplist.readPlist(plist_path)
+        plist = biplist.readPlist(f)
         top_element = plist.get('$top', None)
         if top_element:
             roots = [ x for x in top_element.keys() ]
@@ -84,12 +88,50 @@ def getRootElementNames(plist_path):
         traceback.print_exc()
     return roots
 
+def process_nsa_plist(input_path, f):
+    '''Returns a deserialized plist. Input is NSKeyedArchive'''
+    try:
+        print('Reading file .. ' + input_path)
+        ccl_bplist.set_object_converter(ccl_bplist.NSKeyedArchiver_common_objects_convertor)
+        plist = ccl_bplist.load(f)
+        ns_keyed_archiver_obj = ccl_bplist.deserialise_NsKeyedArchiver(plist, parse_whole_structure=True)
+
+        root_names = getRootElementNames(f)
+        top_level = []
+
+        for root_name in root_names:
+            root = ns_keyed_archiver_obj[root_name]
+
+            print('Trying to deserialize binary plist $top = {}'.format(root_name))
+            if isinstance(root, dict):
+                plist = {}
+                recurseCreatePlist(plist, root, ns_keyed_archiver_obj.object_table)
+                if root_name.lower() != 'root':
+                    plist = { root_name : plist }
+            elif isinstance(root, list):
+                plist = []
+                recurseCreatePlist(plist, root, ns_keyed_archiver_obj.object_table)
+                if root_name.lower() != 'root':
+                    plist = { root_name : plist }
+            else:
+                plist = { root_name : root }
+            
+            if len(root_names) == 1:
+                top_level = plist
+            else: # > 1
+                top_level.append(plist)
+
+    except Exception as ex:
+        print('Had an exception (error)')
+        traceback.print_exc()
+
+    return top_level
 
 usage = '\r\nDeserializer.py   (c) Yogesh Khatri 2018 \r\n'\
         'This script converts an NSKeyedArchive plist into a normal deserialized one.\r\n\r\n'\
         'Usage: python.exe deserializer.py input_plist_path \r\n'\
         ' Example: deserializer.py com.apple.preview.sfl2 \r\n\r\n'\
-        'If successful, the resulting plist will be created in the same folde and will have _unserialized appended to its name.\r\n'
+        'If successful, the resulting plist will be created in the same folder and will have _unserialized appended to its name.\r\n'
 
 def main():
     global usage
@@ -111,44 +153,16 @@ def main():
     # All OK, process the file now
     try:
         f = open(input_path, 'rb')
-        print('Reading file .. ' + input_path)
-        ccl_bplist.set_object_converter(ccl_bplist.NSKeyedArchiver_common_objects_convertor)
-        plist = ccl_bplist.load(f)
-        ns_keyed_archiver_obj = ccl_bplist.deserialise_NsKeyedArchiver(plist, parse_whole_structure=True)
-
-        root_names = getRootElementNames(input_path)
-        top_level = []
-
-        for root_name in root_names:
-            root = ns_keyed_archiver_obj[root_name]
-
-            print('Trying to deserialize binary plist $top = {}'.format(root_name))
-            if isinstance(root, dict):
-                plist = {}
-                recurseCreatePlist(plist, root)
-                if root_name.lower() != 'root':
-                    plist = { root_name : plist }
-            elif isinstance(root, list):
-                plist = []
-                recurseCreatePlist(plist, root)
-                if root_name.lower() != 'root':
-                    plist = { root_name : plist }
-            else:
-                plist = { root_name : root }
-            
-            if len(root_names) == 1:
-                top_level = plist
-            else: # > 1
-                top_level.append(plist)
-
+        deserialised_plist = process_nsa_plist(input_path, f)
         output_path = input_path + '_deserialized.plist'
         print('Writing out .. ' + output_path)
-        biplist.writePlist(top_level, output_path)
-        
-        print('Done !')
+        biplist.writePlist(deserialised_plist, output_path)
+        f.close()
     except Exception as ex:
         print('Had an exception (error)')
         traceback.print_exc()
+    
+    print('Done !')
 
 if __name__ == "__main__":
     main()     

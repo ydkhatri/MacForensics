@@ -45,13 +45,21 @@ def recurseCreatePlist(plist, root, object_table):
                 continue
             v = None
             if isinstance(value, ccl_bplist.BplistUID):
-                v = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
+                v2 = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
+                if isinstance(v2, dict):
+                    v = {}
+                    recurseCreatePlist(v, v2, object_table)
+                elif isinstance(v2, list):
+                    v = []
+                    recurseCreatePlist(v, v2, object_table)
+                else:
+                    v = v2
             elif isinstance(value, list):
                 v = []
-                recurseCreatePlist(v, value, nsa_plist)
+                recurseCreatePlist(v, value, object_table)
             elif isinstance(value, dict):
                 v = {}
-                recurseCreatePlist(v, value, nsa_plist)
+                recurseCreatePlist(v, value, object_table)
             else:
                 v = value
             plist[key] = v
@@ -59,13 +67,21 @@ def recurseCreatePlist(plist, root, object_table):
         for value in root:
             v = None
             if isinstance(value, ccl_bplist.BplistUID):
-                v = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
+                v2 = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
+                if isinstance(v2, dict):
+                    v = {}
+                    recurseCreatePlist(v, v2, object_table)
+                elif isinstance(v2, list):
+                    v = []
+                    recurseCreatePlist(v, v2, object_table)
+                else:
+                    v = v2
             elif isinstance(value, list):
                 v = []
-                recurseCreatePlist(v, value, nsa_plist)
+                recurseCreatePlist(v, value, object_table)
             elif isinstance(value, dict):
                 v = {}
-                recurseCreatePlist(v, value, nsa_plist)
+                recurseCreatePlist(v, value, object_table)
             else:
                 v = value
             plist.append(v)
@@ -90,8 +106,10 @@ def getRootElementNames(f):
 
 def process_nsa_plist(input_path, f):
     '''Returns a deserialized plist. Input is NSKeyedArchive'''
+    global use_as_library
     try:
-        print('Reading file .. ' + input_path)
+        if not use_as_library:
+            print('Reading file .. ' + input_path)
         ccl_bplist.set_object_converter(ccl_bplist.NSKeyedArchiver_common_objects_convertor)
         plist = ccl_bplist.load(f)
         ns_keyed_archiver_obj = ccl_bplist.deserialise_NsKeyedArchiver(plist, parse_whole_structure=True)
@@ -101,8 +119,8 @@ def process_nsa_plist(input_path, f):
 
         for root_name in root_names:
             root = ns_keyed_archiver_obj[root_name]
-
-            print('Trying to deserialize binary plist $top = {}'.format(root_name))
+            if not use_as_library:
+                print('Trying to deserialize binary plist $top = {}'.format(root_name))
             if isinstance(root, dict):
                 plist = {}
                 recurseCreatePlist(plist, root, ns_keyed_archiver_obj.object_table)
@@ -133,8 +151,12 @@ usage = '\r\nDeserializer.py   (c) Yogesh Khatri 2018 \r\n'\
         ' Example: deserializer.py com.apple.preview.sfl2 \r\n\r\n'\
         'If successful, the resulting plist will be created in the same folder and will have _unserialized appended to its name.\r\n'
 
+use_as_library = True
+
 def main():
     global usage
+    global use_as_library
+    use_as_library = False
     if sys.version_info.major == 2:
         print('ERROR-This will not work with python2. Please run again with python3!')
         return

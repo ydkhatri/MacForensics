@@ -34,6 +34,7 @@
 
 import biplist
 import ccl_bplist
+import io
 import os
 import sys
 import traceback
@@ -99,10 +100,26 @@ def getRootElementNames(f):
             roots = [ x for x in top_element.keys() ]
         else:
             print('$top element not found! Not an NSKeyedArchive?')
-    except Exception as ex:
+    except biplist.InvalidPlistException:
         print('Had an exception (error) trying to read plist using biplist')
         traceback.print_exc()
     return roots
+
+def extract_nsa_plist(f):
+    '''Return the embedded plist, if this is such a file.
+       Sometimes there is a single data blob which then has 
+       the NSKeyedArchiver plist in it.
+    '''
+    try:
+        plist = biplist.readPlist(f)
+        if isinstance(plist, bytes):
+            data = plist
+            f.close()
+            f = io.BytesIO(data)
+    except biplist.InvalidPlistException:
+        print('Had an exception (error) trying to read plist using biplist')
+    f.seek(0)
+    return f
 
 def process_nsa_plist(input_path, f):
     '''Returns a deserialized plist. Input is NSKeyedArchive'''
@@ -175,6 +192,7 @@ def main():
     # All OK, process the file now
     try:
         f = open(input_path, 'rb')
+        f = extract_nsa_plist(f)
         deserialised_plist = process_nsa_plist(input_path, f)
         output_path = input_path + '_deserialized.plist'
         print('Writing out .. ' + output_path)

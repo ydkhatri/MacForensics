@@ -36,6 +36,7 @@ import biplist
 import ccl_bplist
 import io
 import os
+import plistlib
 import sys
 import traceback
 
@@ -63,6 +64,11 @@ def recurseCreatePlist(plist, root, object_table):
                 recurseCreatePlist(v, value, object_table)
             else:
                 v = value
+            # change None to empty string. This is because if an object value is $null, it
+            # is most likely going to be a string. This has to be done, else writing a plist back will fail.
+            if v == None:
+                v = ''
+                print('Changing NULL to empty string for key={}'.format(key))
             plist[key] = v
     else: # must be list
         for value in root:
@@ -85,6 +91,11 @@ def recurseCreatePlist(plist, root, object_table):
                 recurseCreatePlist(v, value, object_table)
             else:
                 v = value
+            # change None to empty string. This is because if an object value is $null, it
+            # is most likely going to be a string. This has to be done, else writing a plist back will fail.
+            if v == None:
+                v = ''
+                print('Changing NULL to empty string for key={}'.format(key))
             plist.append(v)
 
 def getRootElementNames(f):
@@ -162,6 +173,31 @@ def process_nsa_plist(input_path, f):
 
     return top_level
 
+def write_plist_to_file(deserialised_plist, output_path):
+    #Using plistLib to write plist
+    out_file = None
+    try:
+        print('Writing out .. ' + output_path)
+        out_file = open(output_path, 'wb')
+        try:
+            plistlib.dump(deserialised_plist, out_file, fmt=plistlib.FMT_BINARY)
+            out_file.close()
+            return True
+        except (TypeError, OverflowError, OSError) as ex:
+            out_file.close()
+            print('Had an exception (error)')
+            traceback.print_exc()
+    except OSError as ex:
+        print('Error opening file for writing: Error={} Path={}'.format(output_path, str(ex)))
+    # Try using biplist
+    try:
+        print('Writing out (using biplist) .. ' + output_path)
+        biplist.writePlist(deserialised_plist, output_path)
+        return True
+    except (biplist.InvalidPlistException, biplist.NotBinaryPlistException, OSError) as ex:
+        print('Had an exception (error)')
+        traceback.print_exc()
+
 usage = '\r\nDeserializer.py   (c) Yogesh Khatri 2018 \r\n'\
         'This script converts an NSKeyedArchive plist into a normal deserialized one.\r\n\r\n'\
         'Usage: python.exe deserializer.py input_plist_path \r\n'\
@@ -195,14 +231,14 @@ def main():
         f = extract_nsa_plist(f)
         deserialised_plist = process_nsa_plist(input_path, f)
         output_path = input_path + '_deserialized.plist'
-        print('Writing out .. ' + output_path)
-        biplist.writePlist(deserialised_plist, output_path)
+        if write_plist_to_file(deserialised_plist, output_path):
+            print('Done !')
+        else:
+            print('Converison Failed !')
         f.close()
     except Exception as ex:
         print('Had an exception (error)')
         traceback.print_exc()
     
-    print('Done !')
-
 if __name__ == "__main__":
     main()     

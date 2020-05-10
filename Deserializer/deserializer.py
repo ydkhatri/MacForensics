@@ -17,7 +17,7 @@
 #
 # Script Name  : DeSerializer.py
 # Author       : Yogesh Khatri
-# Last Updated : Nov 12 2019
+# Last Updated : May 10 2020
 # Purpose      : NSKeyedArchive plists (such as .SFL2 files) are stored as 
 #                serialized data, which is machine readable but not human
 #                readable. This script will convert NSKeyedArchive binary 
@@ -28,7 +28,8 @@
 # Requirements : 
 #                Python3.x
 #                biplist (Get it with pip3 install biplist)
-#                ccl_bplist
+#                ccl_bplist (Use the one supplied with this script, as it has 
+#                            been updated to fix few issues)
 #
 # Note: This will not work with python 2.xx
 
@@ -69,6 +70,10 @@ def recurseCreatePlist(plist, root, object_table):
             if v == None:
                 v = ''
                 print('Changing NULL to empty string for key={}'.format(key))
+            # Keys must be string, else plist writing will fail!
+            if not isinstance(key, str):
+                key = str(key)
+                print(f'Converting non-string key {key} to string')
             plist[key] = v
     else: # must be list
         for value in root:

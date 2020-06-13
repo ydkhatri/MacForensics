@@ -69,7 +69,8 @@ def recurseCreatePlist(plist, root, object_table):
             # is most likely going to be a string. This has to be done, else writing a plist back will fail.
             if v == None:
                 v = ''
-                print('Changing NULL to empty string for key={}'.format(key))
+                if key != 'NS.base': # NS.base is usually UID:0, which is usually None
+                    print('Changing NULL to empty string for key={}'.format(key))
             # Keys must be string, else plist writing will fail!
             if not isinstance(key, str):
                 key = str(key)
@@ -100,7 +101,8 @@ def recurseCreatePlist(plist, root, object_table):
             # is most likely going to be a string. This has to be done, else writing a plist back will fail.
             if v == None:
                 v = ''
-                print('Changing NULL to empty string for key={}'.format(key))
+                if key != 'NS.base': # NS.base is usually UID:0, which is usually None
+                    print('Changing NULL to empty string for key={}'.format(key))
             plist.append(v)
 
 def ConvertCFUID_to_UID(plist):
@@ -276,7 +278,7 @@ def main():
     # All OK, process the file now
     try:
         f = open(input_path, 'rb')
-        f = extract_nsa_plist(f, input_path)
+        f = extract_nsa_plist(f)
         if f:
             deserialised_plist = process_nsa_plist(input_path, f)
             output_path = input_path + '_deserialized.plist'

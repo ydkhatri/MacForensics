@@ -7,3 +7,5 @@ Usage:
 C:\> Deserializer.exe sample.plist
 ```
 The deserialized plist will be stored in the same folder as source plist, and will have `_deserialized.plist` appended to its name.
+
+Download the compiled exe for windows  [here](https://github.com/ydkhatri/MacForensics/raw/master/Deserializer/deserializer.exe).

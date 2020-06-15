@@ -41,6 +41,8 @@ import plistlib
 import sys
 import traceback
 
+deserializer_version = '1.1'
+
 def recurseCreatePlist(plist, root, object_table):
     if isinstance(root, dict):
         for key, value in root.items():
@@ -248,23 +250,28 @@ def write_plist_to_file(deserialised_plist, output_path):
         print('Had an exception (error)')
         traceback.print_exc()
 
-usage = '\r\nDeserializer.py   (c) Yogesh Khatri 2018-2020 \r\n'\
+usage = '\r\nDeserializer version {0}  (c) Yogesh Khatri 2018-2020 \r\n'\
         'This script converts an NSKeyedArchive plist into a normal deserialized one.\r\n\r\n'\
-        'Usage: python.exe deserializer.py input_plist_path \r\n'\
-        ' Example: deserializer.py com.apple.preview.sfl2 \r\n\r\n'\
-        'If successful, the resulting plist will be created in the same folder and will have _unserialized appended to its name.\r\n'
+        '  Usage  : {1} input_plist_path \r\n'\
+        '  Example: {1} C:\\test\\com.apple.preview.sfl2 \r\n\r\n'\
+        'If successful, the resulting plist will be created in the same folder and will have \r\n'\
+        ' _unserialized appended to its name.\r\n'
 
 use_as_library = True
 
 def main():
     global usage
     global use_as_library
+    global deserializer_version
     use_as_library = False
-    if sys.version_info.major == 2:
-        print('ERROR-This will not work with python2. Please run again with python3!')
-        return
+
+    if sys.argv[0].lower().endswith('.exe'):
+        deserializer_launcher = 'deserializer.exe'
+    else:
+        deserializer_launcher = 'python deserializer.py'
+
+    usage = usage.format(deserializer_version, deserializer_launcher)
     argc = len(sys.argv)
-    
     if argc < 2 or sys.argv[1].lower() == '-h':
         print(usage)
         return

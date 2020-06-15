@@ -12,8 +12,5 @@ Download the compiled exe for windows  [here](https://github.com/ydkhatri/MacFor
 
 ### Dependencies
 
-This tool has a dependency on [plistutils](https://github.com/strozfriedberg/plistutils) and [ccl_bplist](https://github.com/cclgroupltd/ccl-bplist). 
-Use the supplied **ccl_bplist.py** and install **plistutils** with pip.
-```
-pip install plistutils
-```
+This tool has a dependency on [ccl_bplist](https://github.com/cclgroupltd/ccl-bplist). 
+Use the supplied **ccl_bplist.py** as it is a modified version.

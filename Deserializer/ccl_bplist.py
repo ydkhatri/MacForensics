@@ -472,7 +472,7 @@ def convert_NSSet(obj):
     if not is_isnsset(obj):
         raise ValueError("obj does not have the correct structure for a NSSet/NSMutableSet serialised to a NSKeyedArchiver")
 
-    return set(obj["NS.objects"])
+    return list(obj["NS.objects"]) # set(obj["NS.objects"]) # Changed Set to List (YK)
 
 # NSString convenience functions
 def is_nsstring(obj):

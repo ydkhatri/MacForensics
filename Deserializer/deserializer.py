@@ -49,16 +49,17 @@ rec_depth = 0
 rec_uids = []
 
 def RecurseSafely(uid, plist, root, object_table):
-    #global rec_depth
+    '''Returns False if infinite recursion was detected'''
     global rec_uids
     if uid in rec_uids:
         print(f'Possible INFINITE RECURSION detected - breaking loop! uid={uid} , LIST={str(rec_uids)}')
-        if isinstance(plist, list):
-            plist.append(f'ERROR - uid={uid}')
-        return
+        #if isinstance(plist, list):
+        #    plist.append('ERROR - Infinite Recursion')
+        return False
     rec_uids.append(uid)
     recurseCreatePlist(plist, root, object_table)
     rec_uids.pop()
+    return True
 
 def recurseCreatePlist(plist, root, object_table):
     global rec_depth
@@ -70,15 +71,16 @@ def recurseCreatePlist(plist, root, object_table):
         for key, value in root.items():
             if key == '$class': 
                 continue
+            add_this_item = True
             v = None
             if isinstance(value, ccl_bplist.BplistUID):
                 v2 = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
                 if isinstance(v2, dict):
                     v = {}
-                    RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
+                    add_this_item = RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
                 elif isinstance(v2, list):
                     v = []
-                    RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
+                    add_this_item = RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
                 else:
                     v = v2
             elif isinstance(value, list):
@@ -99,18 +101,20 @@ def recurseCreatePlist(plist, root, object_table):
             if not isinstance(key, str):
                 key = str(key)
                 print(f'Converting non-string key {key} to string')
-            plist[key] = v
+            if add_this_item:
+                plist[key] = v
     else: # must be list
         for value in root:
             v = None
+            add_this_item = True
             if isinstance(value, ccl_bplist.BplistUID):
                 v2 = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
                 if isinstance(v2, dict):
                     v = {}
-                    RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
+                    add_this_item = RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
                 elif isinstance(v2, list):
                     v = []
-                    RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
+                    add_this_item = RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
                 else:
                     v = v2
             elif isinstance(value, list):
@@ -127,8 +131,10 @@ def recurseCreatePlist(plist, root, object_table):
                 v = ''
                 if key != 'NS.base': # NS.base is usually UID:0, which is usually None
                     print('Changing NULL to empty string for key={}'.format(key))
-            plist.append(v)
+            if add_this_item:
+                plist.append(v)
     rec_depth -= 1
+    
 def ConvertCFUID_to_UID(plist):
     ''' For converting XML plists to binary, UIDs which are represented
         as strings 'CF$UID' must be translated to actual UIDs.

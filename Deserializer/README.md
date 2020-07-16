@@ -1,6 +1,7 @@
 ## Deserializer for ios/macos plists
 
 This converts an NSKeyedArchive plist into a normal unserialized one, that can be easily read. 
+#### _Update - This is now available for use as a library (installable via pip) [here](https://github.com/ydkhatri/nska_deserialize), if you need to use in your code._  
 
 ### Usage
 ```

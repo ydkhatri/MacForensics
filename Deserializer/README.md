@@ -33,5 +33,5 @@ The compiled exe for windows is [here](https://github.com/ydkhatri/MacForensics/
 
 ### Dependencies
 
-This tool has a dependency on [ccl_bplist](https://github.com/cclgroupltd/ccl-bplist). 
+This tool has a dependency on biplist and [ccl_bplist](https://github.com/cclgroupltd/ccl-bplist). 
 Use the supplied **ccl_bplist.py** as it is a modified version.

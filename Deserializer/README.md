@@ -16,7 +16,7 @@ C:\> Deserializer.exe -j sample.plist
 The deserialized file will be stored in the same folder as source plist, and will have `_deserialized.plist` or `_deserialized.json` appended to its name.
 
 ### Usage as a library
-```
+```python
 import deserializer
 
 input_path = 'c:\\nskeyedarchive.plist'

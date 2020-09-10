@@ -16,8 +16,8 @@
 # Script Name  : macNotifications.py
 # Author       : Yogesh Khatri
 # Last Updated : 5/10/2018
-# Requirement  : Python (2 or 3) and biplist
-#                biplist can be installed using the command 'pip install biplist' 
+# Requirement  : Python 3 and biplist
+#                biplist can be installed using the command 'pip3 install biplist' 
 # 
 # Purpose      : Parse the Notifications db found on mac OSX systems.
 #                This database in OSX 10.8 is located at:
@@ -72,14 +72,15 @@ def ReadMacAbsoluteTime(mac_abs_time): # Mac Absolute time is time epoch beginni
 def GetText(string_or_binary):
     '''Converts binary or text string into text string. UUID in Sierra is now binary blob instead of hex text.'''
     uuid_text = ''
-    try:
-        if type(string_or_binary) == buffer or type(string_or_binary) == bytes: # Python3 is 'bytes'
-            #hex_str = ''.join('{:02X}'.format(ord(x)) for x in string_or_binary)
-            uuid_text = str(uuid.UUID(bytes=string_or_binary)).upper()
-        else:
-            uuid_text = string_or_binary.upper()
-    except Exception as ex:
-        print('Error trying to convert binary value to hex text. Details: ' + str(ex))
+    if uuid_text:
+        try:
+            if type(string_or_binary) == bytes:
+                #hex_str = ''.join('{:02X}'.format(ord(x)) for x in string_or_binary)
+                uuid_text = str(uuid.UUID(bytes=string_or_binary)).upper()
+            else:
+                uuid_text = string_or_binary.upper()
+        except Exception as ex:
+            print('Error trying to convert binary value to hex text. Details: ' + str(ex))
     return uuid_text
 
 def GetDbVersion(conn):
@@ -230,5 +231,3 @@ if len(sys.argv) > 2:
 else:
     print("Not enough arguments..")
     print(usage)
-
-	

@@ -43,7 +43,7 @@ import plistlib
 import sys
 import traceback
 
-deserializer_version = '1.2'
+deserializer_version = '1.3'
 
 rec_depth = 0
 rec_uids = []

@@ -25,6 +25,10 @@ C:\> Deserializer.exe C:\Samples\
 
 The deserialized file will be stored in the same folder as source plist, and will have `_deserialized.plist` or `_deserialized.json` appended to its name.
 
+You can also drag and drop a plist onto the exe.
+![Screen Recording 2024-08-04 at 11 19 19 PM](https://github.com/user-attachments/assets/c165645b-4ac6-4989-a291-94b1bcb469dd)
+
+
 ### Download  
 The compiled exe for windows is [here](https://github.com/ydkhatri/MacForensics/raw/master/Deserializer/deserializer.exe).
 

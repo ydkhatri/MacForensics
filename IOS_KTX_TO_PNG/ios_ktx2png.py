@@ -1,4 +1,4 @@
-"""
+r"""
     (c) Yogesh Khatri 2020, MIT License
 
     This library converts ios created KTX files to PNG. These are 
@@ -14,15 +14,24 @@
     ship with KTX files that are not of the same type and can't be
     parsed with this code.
 
-    Dependencies
+    Installing Dependencies (up to Python 3.12)
     ------------
-    pillow, pyliblzfse, astc_decomp
+    Create virtual environment:
+      python3 -m venv ios_ktx2png
+    
+    Enter virtual environment:
+      *nix: source ios_ktx2png/bin/activate
+      Windows: ios_ktx2png\Scripts\activate
+    
+    Install package deps (pillow, pyliblzfse, astc_decomp_faster) via pip:
+      pip3 install pyliblzfse pillow astc_decomp_faster
+    
 
-    Install deps via pip:
-      pip3 install pyliblzfse astc_decomp pillow
-
-    Usage
+    Usage (up to Python 3.12)
     -----
+    Enter virtual environment (if not done already):
+      *nix: source ios_ktx2png/bin/activate
+      Windows: ios_ktx2png\Scripts\activate
 
     python3 ios_ktx2png.py SAMPLE.KTX
 
@@ -31,7 +40,7 @@
     See main 
 """
 
-import astc_decomp 
+import astc_decomp_faster as astc_decomp
 import liblzfse
 import os
 import struct
@@ -245,3 +254,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

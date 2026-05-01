@@ -8,6 +8,6 @@ Darwin folders | darwin_path_generator.py | DARWIN_USER_ folders name generation
 Deserialize NSKeyedArchive plists | Deserializer/deserializer.py<br>Deserializer/deserializer.exe | Converts NSKeyedArchive plists to normal (human-readable) plists (Code + compiled exe for windows)  
 Domain (Active Directory) | Domain_Info/Read_ConfigProfiles.py | Reads user profile information for AD domain users from the ConfigProfiles.binary file
 DotUnderscore ._ files | DotUnderscore_macos.bt | An 010 template for parsing extended attribute files that begin with ._
-Ktx to Png convertor | IOS_KTX_TO_PNG/ios_ktx2png.py<br>IOS_KTX_TO_PNG/ios_ktx2png.exe | Convert ios created KTX texture images (like app snapshots) to PNG (Code + compiled exe for windows)  
+Ktx to Png convertor | IOS_KTX_TO_PNG/ios_ktx2png.py<br>IOS_KTX_TO_PNG/ios_ktx2png.exe<br>IOS_KTX_TO_PNG/ios_ktx2png.linux | Convert ios created KTX texture images (like app snapshots) to PNG. Python (up to 3.12) code, compiled exe for Windows, compiled binary for Linux  
 Notifications | macNotifications.py | Parse Mac Notifications db
 Office reg file | Read_OfficeRegDB.py | Parse MS Office created sqlite db (microsoftRegistrationDB.reg)
